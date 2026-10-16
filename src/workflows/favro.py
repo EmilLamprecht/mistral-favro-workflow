@@ -17,6 +17,7 @@ import mistralai.workflows as workflows
 
 FAVRO_BASE_URL = "https://favro.com/api/v1"
 ALLOWED_METHODS = {"GET", "POST", "PUT", "PATCH"}
+WORKER_BUILD = "b3-debug-marker"
 
 
 class FavroInput(BaseModel):
@@ -45,7 +46,7 @@ def _value_shape(name: str, value: str, is_email: bool) -> dict[str, Any]:
     return shape
 
 
-@workflows.activity()
+
 async def favro_request(
     method: str,
     path: str,
@@ -65,8 +66,19 @@ async def favro_request(
     org_id = os.environ.get("FAVRO_ORG_ID", "")
 
     if debug:
+        meta = {"worker_build": WORKER_BUILD}
+        try:
+            with open("/proc/uptime") as f:
+                host_uptime_s = float(f.read().split()[0])
+            with open("/proc/self/stat") as f:
+                start_ticks = float(f.read().rsplit(") ", 1)[1].split()[19])
+            boot_wall = time.time() - host_uptime_s
+            meta["worker_started_at"] = boot_wall + (start_ticks / 100.0)
+        except Exception as exc:
+            meta["worker_meta_error"] = str(exc)[:120]
         return {
             "debug": True,
+            **meta,
             "FAVRO_USER_EMAIL": _value_shape("FAVRO_USER_EMAIL", email, True),
             "FAVRO_API_TOKEN": _value_shape("FAVRO_API_TOKEN", token, False),
             "FAVRO_ORG_ID": _value_shape("FAVRO_ORG_ID", org_id, False),
