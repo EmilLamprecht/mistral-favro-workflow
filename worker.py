@@ -2,7 +2,10 @@
 
 import asyncio
 
-import mistralai_workflows
+try:
+    import mistralai_workflows
+except ImportError:  # namespace-package layout
+    from mistralai import workflows as mistralai_workflows
 
 from src.workflows.favro import FavroRequestWorkflow
 
