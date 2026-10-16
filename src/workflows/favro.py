@@ -3,12 +3,14 @@
 Scope: read + write (GET, POST, PUT, PATCH). DELETE is blocked by design.
 Credentials come from environment variables bound as workspace secrets:
   FAVRO_USER_EMAIL, FAVRO_API_TOKEN, FAVRO_ORG_ID
+
+Note: keep module-level imports minimal. The Temporal workflow sandbox
+restricts module-level imports; heavy libraries are imported inside the
+activity body, which runs unsandboxed.
 """
 
-import os
 from typing import Any
 
-import httpx
 from pydantic import BaseModel, Field
 
 import mistralai.workflows as workflows
@@ -34,6 +36,11 @@ async def favro_request(
     extra_headers: dict[str, str],
 ) -> dict[str, Any]:
     """Call the Favro REST API with credentials from the environment."""
+    # Lazy imports: the activity runs unsandboxed, so these are safe here.
+    import os
+
+    import httpx
+
     email = os.environ["FAVRO_USER_EMAIL"]
     token = os.environ["FAVRO_API_TOKEN"]
     org_id = os.environ.get("FAVRO_ORG_ID", "")
