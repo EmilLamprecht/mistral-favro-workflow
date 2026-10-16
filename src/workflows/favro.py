@@ -19,7 +19,7 @@ import mistralai.workflows as workflows
 
 FAVRO_BASE_URL = "https://favro.com/api/v1"
 ALLOWED_METHODS = {"GET", "POST", "PUT", "PATCH"}
-WORKER_BUILD = "b4-auth-override"
+WORKER_BUILD = "b5-org-fix"
 
 
 class FavroInput(BaseModel):
