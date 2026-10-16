@@ -3,6 +3,8 @@
 Scope: read + write (GET, POST, PUT, PATCH). DELETE is blocked by design.
 Credentials come from environment variables bound as workspace secrets:
   FAVRO_USER_EMAIL, FAVRO_API_TOKEN, FAVRO_ORG_ID
+An explicit "Authorization" header in extra_headers overrides the env
+credentials, which is useful for testing a credential pair directly.
 
 Note: keep module-level imports minimal. The Temporal workflow sandbox
 restricts module-level imports; heavy libraries are imported inside the
@@ -17,7 +19,7 @@ import mistralai.workflows as workflows
 
 FAVRO_BASE_URL = "https://favro.com/api/v1"
 ALLOWED_METHODS = {"GET", "POST", "PUT", "PATCH"}
-WORKER_BUILD = "b3-debug-marker"
+WORKER_BUILD = "b4-auth-override"
 
 
 class FavroInput(BaseModel):
@@ -25,7 +27,7 @@ class FavroInput(BaseModel):
     path: str = Field(default="/organizations", description="API path relative to /api/v1, e.g. /widgets or /cards/<cardId>")
     query: dict[str, Any] = Field(default_factory=dict, description="Query parameters")
     body: dict[str, Any] = Field(default_factory=dict, description="JSON request body")
-    extra_headers: dict[str, str] = Field(default_factory=dict, description="Additional Favro headers")
+    extra_headers: dict[str, str] = Field(default_factory=dict, description="Additional Favro headers. An Authorization header overrides the env credentials for this call.")
     debug: bool = Field(default=False, description="Return a masked shape report of the credential env vars instead of calling Favro. Never exposes secret values.")
 
 
@@ -85,7 +87,9 @@ async def favro_request(
             "FAVRO_ORG_ID": _value_shape("FAVRO_ORG_ID", org_id, False),
         }
 
-    if not email or not token:
+    auth_override = any(k.lower() == "authorization" for k in extra_headers)
+
+    if not auth_override and (not email or not token):
         return {
             "status": 0,
             "error": True,
@@ -115,7 +119,7 @@ async def favro_request(
             params=query or None,
             json=body or None,
             headers=headers,
-            auth=(email, token),
+            auth=None if auth_override else (email, token),
         )
 
     result: dict[str, Any] = {"status": resp.status_code}
