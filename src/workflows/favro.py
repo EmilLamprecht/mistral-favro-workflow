@@ -46,7 +46,7 @@ def _value_shape(name: str, value: str, is_email: bool) -> dict[str, Any]:
     return shape
 
 
-
+@workflows.activity()
 async def favro_request(
     method: str,
     path: str,
@@ -58,6 +58,7 @@ async def favro_request(
     """Call the Favro REST API with credentials from the environment."""
     # Lazy imports: the activity runs unsandboxed, so these are safe here.
     import os
+    import time
 
     import httpx
 
@@ -66,7 +67,7 @@ async def favro_request(
     org_id = os.environ.get("FAVRO_ORG_ID", "")
 
     if debug:
-        meta = {"worker_build": WORKER_BUILD}
+        meta: dict[str, Any] = {"worker_build": WORKER_BUILD}
         try:
             with open("/proc/uptime") as f:
                 host_uptime_s = float(f.read().split()[0])
