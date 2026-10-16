@@ -21,10 +21,28 @@ ALLOWED_METHODS = {"GET", "POST", "PUT", "PATCH"}
 
 class FavroInput(BaseModel):
     method: str = Field(default="GET", description="HTTP method: GET, POST, PUT, or PATCH")
-    path: str = Field(description="API path relative to /api/v1, e.g. /boards or /cards/<cardId>")
+    path: str = Field(default="/organizations", description="API path relative to /api/v1, e.g. /widgets or /cards/<cardId>")
     query: dict[str, Any] = Field(default_factory=dict, description="Query parameters")
     body: dict[str, Any] = Field(default_factory=dict, description="JSON request body")
     extra_headers: dict[str, str] = Field(default_factory=dict, description="Additional Favro headers")
+    debug: bool = Field(default=False, description="Return a masked shape report of the credential env vars instead of calling Favro. Never exposes secret values.")
+
+
+def _value_shape(name: str, value: str, is_email: bool) -> dict[str, Any]:
+    """Describe a secret env value without revealing it."""
+    has_at = "@" in value
+    shape: dict[str, Any] = {
+        "env_var": name,
+        "set": bool(value),
+        "length": len(value),
+        "contains_quote": ('"' in value) or ("'" in value),
+        "contains_whitespace": any(ch.isspace() for ch in value),
+        "needs_trim": value != value.strip(),
+    }
+    if is_email:
+        local, _, domain = value.partition("@")
+        shape["masked"] = (local[:2] + "***@" + domain) if has_at else value[:2] + "*** (no @ sign)"
+    return shape
 
 
 @workflows.activity()
@@ -34,6 +52,7 @@ async def favro_request(
     query: dict[str, Any],
     body: dict[str, Any],
     extra_headers: dict[str, str],
+    debug: bool,
 ) -> dict[str, Any]:
     """Call the Favro REST API with credentials from the environment."""
     # Lazy imports: the activity runs unsandboxed, so these are safe here.
@@ -41,9 +60,28 @@ async def favro_request(
 
     import httpx
 
-    email = os.environ["FAVRO_USER_EMAIL"]
-    token = os.environ["FAVRO_API_TOKEN"]
+    email = os.environ.get("FAVRO_USER_EMAIL", "")
+    token = os.environ.get("FAVRO_API_TOKEN", "")
     org_id = os.environ.get("FAVRO_ORG_ID", "")
+
+    if debug:
+        return {
+            "debug": True,
+            "FAVRO_USER_EMAIL": _value_shape("FAVRO_USER_EMAIL", email, True),
+            "FAVRO_API_TOKEN": _value_shape("FAVRO_API_TOKEN", token, False),
+            "FAVRO_ORG_ID": _value_shape("FAVRO_ORG_ID", org_id, False),
+        }
+
+    if not email or not token:
+        return {
+            "status": 0,
+            "error": True,
+            "data": {
+                "message": "Missing credential env var in worker",
+                "FAVRO_USER_EMAIL": _value_shape("FAVRO_USER_EMAIL", email, True),
+                "FAVRO_API_TOKEN": _value_shape("FAVRO_API_TOKEN", token, False),
+            },
+        }
 
     method = method.upper()
     if method not in ALLOWED_METHODS:
@@ -94,4 +132,5 @@ class FavroRequestWorkflow:
             input.query,
             input.body,
             input.extra_headers,
+            input.debug,
         )
