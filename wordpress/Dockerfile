@@ -1,0 +1,20 @@
+FROM python:3.12-slim
+
+# Secrets are injected as build args; declare them (unused at build time).
+ARG WP_AGENT_USERNAME
+ARG WP_PASS_MARTYROSSMD
+ARG WP_PASS_TREATLYME_PROD
+ARG WP_PASS_TREATLYME_STAGING
+ARG WP_PASS_PARED_PROD
+ARG WP_PASS_PARED_STAGING
+ARG WP_PASS_GROWTH_MECHANICS
+ARG WP_PASS_LIVEUTIFREE_PROD
+ARG WP_PASS_LIVEUTIFREE_STAGING
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir "mistralai-workflows>=3.10" httpx
+
+COPY . .
+
+CMD ["python", "worker.py"]
