@@ -37,12 +37,20 @@ femologist.com is Shopify and tuttu is not WordPress; neither is covered.
 
 ## Required workspace secrets (bound at deploy time)
 
-- WP_AGENT_USERNAME: shared agent login, mistral@growth-mechanics.com
-- WP_PASS_MARTYROSSMD: app password, martyrossmd.com
-- WP_PASS_TREATLYME_PROD / WP_PASS_TREATLYME_STAGING
-- WP_PASS_PARED_PROD / WP_PASS_PARED_STAGING
-- WP_PASS_GROWTH_MECHANICS
-- WP_PASS_LIVEUTIFREE_PROD / WP_PASS_LIVEUTIFREE_STAGING
+Workspace secret names are lowercase; the deploy binding maps each to the
+uppercase env var the worker reads (same pattern as the favro deployment).
+
+| workspace secret (lowercase)   | env var in worker           | what it is                                  |
+|--------------------------------|-----------------------------|---------------------------------------------|
+| wp_agent_username              | WP_AGENT_USERNAME           | shared agent login, mistral@growth-mechanics.com |
+| wp_pass_martyrossmd            | WP_PASS_MARTYROSSMD        | app password, martyrossmd.com               |
+| wp_pass_treatlyme_prod         | WP_PASS_TREATLYME_PROD     | app password, treatlyme.com                 |
+| wp_pass_treatlyme_staging      | WP_PASS_TREATLYME_STAGING  | app password, gm-rebuild.treatlyme.com      |
+| wp_pass_pared_prod             | WP_PASS_PARED_PROD         | app password, paredinsights.org             |
+| wp_pass_pared_staging          | WP_PASS_PARED_STAGING      | app password, env-paredinsights-premstaging.kinsta.cloud |
+| wp_pass_growth_mechanics       | WP_PASS_GROWTH_MECHANICS   | app password, growth-mechanics.com          |
+| wp_pass_liveutifree_prod       | WP_PASS_LIVEUTIFREE_PROD   | app password, liveutifree.com               |
+| wp_pass_liveutifree_staging    | WP_PASS_LIVEUTIFREE_STAGING| app password, prem-staging.liveutifree.com  |
 
 Each WordPress install has its own users: the agent user and its
 Application Password must be created on every site and staging site
