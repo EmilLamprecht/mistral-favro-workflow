@@ -15,13 +15,14 @@ environment variables bound as workspace secrets:
   WP_PASS_LIVEUTIFREE_PROD     Application Password, liveutifree.com
   WP_PASS_LIVEUTIFREE_STAGING  Application Password, prem-staging.liveutifree.com
 
-Optional outer HTTP auth (htaccess-style basic auth in front of a site,
-value format "user:pass"). The fallback is read-only in practice: a request
-that clears the outer layer cannot also carry WP app-password credentials,
-so authenticated WP operations fail until /wp-json is exempted from the
-outer auth in the web server config:
+Optional outer HTTP auth (htaccess-style basic auth in front of a site),
+stored as TWO secrets per site (username and password). The fallback is
+read-only in practice: a request that clears the outer layer cannot also
+carry WP app-password credentials, so authenticated WP operations fail
+until /wp-json is exempted from the outer auth in the web server config:
 
-  WP_HTTPAUTH_TREATLYME_STAGING
+  WP_HTACCESS_USERNAME_TREATLYME_STAGING
+  WP_HTACCESS_PASS_TREATLYME_STAGING
 
 Per-site usernames: SITES below may carry a baked-in "username" (not a
 secret). treatlyme uses the WP login "vibeness". Sites without one use
@@ -46,7 +47,7 @@ from pydantic import BaseModel, Field
 import mistralai.workflows as workflows
 
 ALLOWED_METHODS = {"GET", "POST", "PUT", "PATCH"}
-WORKER_BUILD = "wp-b2-per-site-user-httpauth"
+WORKER_BUILD = "wp-b3-two-secret-httpauth"
 
 SITES: dict[str, dict[str, Any]] = {
     "martyrossmd": {
@@ -59,14 +60,16 @@ SITES: dict[str, dict[str, Any]] = {
         "staging": "https://gm-rebuild.treatlyme.com",
         "env_var": "WP_PASS_TREATLYME_PROD",
         "staging_env_var": "WP_PASS_TREATLYME_STAGING",
-        "staging_http_auth_env_var": "WP_HTTPAUTH_TREATLYME_STAGING",
+        "staging_http_auth_user_env_var": "WP_HTACCESS_USERNAME_TREATLYME_STAGING",
+        "staging_http_auth_pass_env_var": "WP_HTACCESS_PASS_TREATLYME_STAGING",
     },
     "pared": {
         "production": "https://paredinsights.org",
         "staging": "https://env-paredinsights-premstaging.kinsta.cloud",
         "env_var": "WP_PASS_PARED_PROD",
         "staging_env_var": "WP_PASS_PARED_STAGING",
-        "staging_http_auth_env_var": "WP_HTTPAUTH_PARED_STAGING",
+        "staging_http_auth_user_env_var": "WP_HTACCESS_USERNAME_PARED_STAGING",
+        "staging_http_auth_pass_env_var": "WP_HTACCESS_PASS_PARED_STAGING",
     },
     "growth-mechanics": {
         "production": "https://growth-mechanics.com",
@@ -77,14 +80,16 @@ SITES: dict[str, dict[str, Any]] = {
         "staging": "https://prem-staging.liveutifree.com",
         "env_var": "WP_PASS_LIVEUTIFREE_PROD",
         "staging_env_var": "WP_PASS_LIVEUTIFREE_STAGING",
-        "staging_http_auth_env_var": "WP_HTTPAUTH_LIVEUTIFREE_STAGING",
+        "staging_http_auth_user_env_var": "WP_HTACCESS_USERNAME_LIVEUTIFREE_STAGING",
+        "staging_http_auth_pass_env_var": "WP_HTACCESS_PASS_LIVEUTIFREE_STAGING",
     },
 }
 
 ALL_ENV_VARS = ["WP_AGENT_USERNAME"] + sorted(
     {site["env_var"] for site in SITES.values()}
     | {site["staging_env_var"] for site in SITES.values() if site.get("staging_env_var")}
-    | {site["staging_http_auth_env_var"] for site in SITES.values() if site.get("staging_http_auth_env_var")}
+    | {site["staging_http_auth_user_env_var"] for site in SITES.values() if site.get("staging_http_auth_user_env_var")}
+    | {site["staging_http_auth_pass_env_var"] for site in SITES.values() if site.get("staging_http_auth_pass_env_var")}
 )
 
 
@@ -158,7 +163,8 @@ async def wordpress_request(
 
     target = cfg["staging"] if environment == "staging" else cfg["production"]
     env_var = cfg["staging_env_var"] if environment == "staging" else cfg["env_var"]
-    http_auth_var = cfg.get("staging_http_auth_env_var") if environment == "staging" else cfg.get("http_auth_env_var")
+    http_auth_user_var = cfg.get("staging_http_auth_user_env_var") if environment == "staging" else cfg.get("http_auth_user_env_var")
+    http_auth_pass_var = cfg.get("staging_http_auth_pass_env_var") if environment == "staging" else cfg.get("http_auth_pass_env_var")
 
     if debug:
         return {
@@ -231,9 +237,9 @@ async def wordpress_request(
     # outer credentials are configured, retry through that layer. The outer
     # layer consumes the Authorization header, so WP auth cannot ride along:
     # reads of public endpoints work, authenticated WP operations do not.
-    if resp.status_code == 401 and not _is_json(resp) and http_auth_var:
-        outer = os.environ.get(http_auth_var, "")
-        outer_user, _, outer_pass = outer.partition(":")
+    if resp.status_code == 401 and not _is_json(resp) and http_auth_user_var and http_auth_pass_var:
+        outer_user = os.environ.get(http_auth_user_var, "")
+        outer_pass = os.environ.get(http_auth_pass_var, "")
         if outer_user and outer_pass:
             try:
                 resp = await _attempt((outer_user, outer_pass))
